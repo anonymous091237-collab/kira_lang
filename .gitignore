@@ -1,0 +1,7 @@
+*.rar
+.vscode
+build
+.cache
+*.exe
+*.out
+*.o

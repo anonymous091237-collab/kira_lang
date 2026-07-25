@@ -1,0 +1,95 @@
+#pragma once
+
+#include <array>
+#include <cstdint>
+#include <string_view>
+#include <unordered_map>
+
+using VarId = uint32_t;
+inline constexpr std::array<std::string_view, 12> varTypes = {
+    "void", "byte", "ubyte", "short", "ushort", "int",
+    "uint", "long", "ulong", "bool",  "char",   "string"};
+
+// clang-format off
+enum class OP : uint8_t {
+    FUN, RET, VAR, STORE,
+    ADD, SUB, MUL, DIV, MOD, // math operation
+    EQ, NE, LT, LE, GT, GE, // comparison
+    DEF, JMPC, JMP, LABEL,
+    NEG, PARAM, CALL, STD, END
+};
+// clang-format on
+const std::array<const char*, 24> StrOp = {
+    "FUN",  "RET",  "VAR", "STORE", "ADD", "SUB",
+    "MUL",  "DIV",  "MOD",                        // math operation
+    "EQ",   "NE",   "LT",  "LE",    "GT",  "GE",  // comparison
+    "DEF",  "JMPC", "JMP", "LABEL", "NEG", "PARAM",
+    "CALL", "STD",  "END"};
+
+enum class std_lib : uint8_t { PRINT };
+enum class Type : uint8_t { unknown, i1, i8, i16, i32, i64, u8, u16, u32, u64 };
+const std::unordered_map<std::string_view, Type> str_to_Type = {
+    {"bool", Type::i1},    {"byte", Type::i8},
+    {"ubyte", Type::u8},   {"short", Type::i16},
+    {"ushort", Type::u16}, {"int", Type::i32},
+    {"uint", Type::u32},   {"long", Type::i64},
+    {"ulong", Type::u64}
+
+};
+
+const std::unordered_map<Type, std::string_view> Type_to_str = {
+    {Type::unknown, "unknown"}, {Type::i1, "i1"},   {Type::i8, "i8"},
+    {Type::u8, "i8"},           {Type::i16, "i16"}, {Type::u16, "i16"},
+    {Type::i32, "i32"},         {Type::u32, "i32"}, {Type::i64, "i64"},
+    {Type::u64, "i64"}};
+const std::unordered_map<std::string_view, OP> str_to_biop = {
+    {"+", OP::ADD}, {"-", OP::SUB}, {"*", OP::MUL}, {"/", OP::DIV},
+    {"%", OP::MOD}, {"==", OP::EQ}, {"!=", OP::NE}, {"<", OP::LT},
+    {"<=", OP::LE}, {">", OP::GT},  {">=", OP::GE},
+};
+const std::unordered_map<std::string_view, OP> str_to_unop = {{"-", OP::NEG}};
+enum class Tag : uint8_t {
+    VOID,
+    ID,
+    NUM_I8,  // all unsigned
+    NUM_I16,
+    NUM_I32,
+    NUM_I64,
+
+    STR8,
+    STR16,
+    STR32,
+    STR64
+
+};
+enum class NodeType {
+    NONE,
+    BIOP,  // + - * / == >= ...
+    UNOP,  // -x !x
+    NUM,   // 123 5.4 0
+    STR,   //  'c', "hello"
+    ID,    // identifiers
+    CALL,  // foo(a, b)
+
+    VARDEC,  // int x = 5
+    FUNDEC,  // int foo(...)
+    PARAMS,  // parameter list
+    PARAM,   // one parameter
+    TYPE,
+
+    BLOCK,     // {...}
+    RETSTMNT,  // return x
+    IFSTMNT,   // if (...)
+    ELSE,
+    WHILESTMNT,  // while (...)
+    FORSTMNT,    // for (...)
+
+    ASSIGN,  // x = 5 (if you don't treat it as BiOp)
+    ARG,     // function call arguments
+};
+
+constexpr std::array<std::string_view, 20> NodeTypeNames = {
+    "NONE",  "BIOP",       "UNOP",     "NUM",      "STR",
+    "ID",    "CALL",       "VARDEC",   "FUNDEC",   "PARAMS",
+    "PARAM", "TYPE",       "BLOCK",    "RETSTMNT", "IFSTMNT",
+    "ELSE",  "WHILESTMNT", "FORSTMNT", "ASSIGN",   "ARG"};

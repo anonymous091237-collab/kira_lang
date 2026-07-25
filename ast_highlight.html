@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>AST → Source</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@500;600;700&display=swap');
+
+  :root{
+    --ink:        #0d1b1e;
+    --panel:      #11262a;
+    --panel-line: #1b3339;
+    --paper:      #eef3f1;
+    --dim:        #6f9199;
+    --amber:      #e8a458;
+    --teal:       #5fc9b8;
+    --rose:       #e07a89;
+    --violet:     #9d8cd6;
+    --line:       #24444b;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background: var(--ink);
+    background-image:
+      radial-gradient(ellipse at top left, rgba(95,201,184,0.06), transparent 55%),
+      radial-gradient(ellipse at bottom right, rgba(232,164,88,0.05), transparent 50%);
+    color: var(--paper);
+    font-family:'JetBrains Mono', monospace;
+    min-height:100vh;
+    padding: 40px 20px 60px;
+  }
+
+  .wrap{ max-width: 940px; margin: 0 auto; }
+
+  header{
+    display:flex; align-items:baseline; justify-content:space-between;
+    margin-bottom: 28px; flex-wrap: wrap; gap: 10px;
+  }
+  .brand{
+    font-family:'Space Grotesk', sans-serif;
+    font-weight:700; font-size: 22px; letter-spacing:-0.02em;
+    color: var(--paper);
+  }
+  .brand span{ color: var(--teal); }
+  .meta{
+    font-size: 12px; color: var(--dim); letter-spacing: 0.03em;
+  }
+
+  .tabs{
+    display:flex; gap: 2px; margin-bottom: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .tab{
+    font-family:'Space Grotesk', sans-serif;
+    font-size: 13px; font-weight:600; letter-spacing:0.02em;
+    padding: 10px 18px;
+    color: var(--dim);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    position: relative;
+    top: 1px;
+  }
+  .tab.active{
+    color: var(--paper);
+    border-bottom: 2px solid var(--teal);
+  }
+  .tab:hover{ color: var(--paper); }
+
+  .panel{
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-top: none;
+    border-radius: 0 0 10px 10px;
+    overflow: hidden;
+  }
+
+  .codebox{
+    display: grid;
+    grid-template-columns: 46px 1fr;
+    font-size: 13.5px;
+    line-height: 1.65;
+  }
+  .gutter{
+    background: rgba(0,0,0,0.15);
+    color: var(--dim);
+    text-align: right;
+    padding: 18px 10px 18px 0;
+    user-select: none;
+    border-right: 1px solid var(--panel-line);
+  }
+  .gutter div{ padding-right: 4px; }
+  .code{
+    padding: 18px 20px;
+    white-space: pre;
+    overflow-x: auto;
+    tab-size: 4;
+  }
+
+  .kw   { color: var(--rose); font-weight: 700; }
+  .type { color: var(--teal); }
+  .id   { color: var(--paper); }
+  .fn   { color: var(--amber); font-weight: 600; }
+  .num  { color: var(--violet); }
+  .str  { color: #c9d97a; }
+  .op   { color: var(--amber); }
+  .punc { color: var(--dim); }
+  .comment{ color: var(--dim); font-style: italic; }
+
+  .tree{ padding: 18px 22px; font-size: 13px; line-height: 1.75; overflow-x:auto; }
+  .tree .row{ white-space: pre; }
+  .tree .tag{ color: var(--dim); }
+  .tree .tag.hot{ color: var(--teal); }
+
+  .uploadRow{
+    display:flex; align-items:center; gap: 12px; flex-wrap: wrap;
+    margin-bottom: 18px;
+  }
+  .fileBtn{
+    font-family:'Space Grotesk', sans-serif;
+    font-size: 12.5px; font-weight:600; letter-spacing:0.02em;
+    color: var(--ink);
+    background: var(--teal);
+    padding: 8px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    border: 1px solid var(--teal);
+    transition: filter 0.15s ease;
+  }
+  .fileBtn:hover{ filter: brightness(1.08); }
+  .resetBtn{
+    font-family:'Space Grotesk', sans-serif;
+    font-size: 12px; font-weight:600; letter-spacing:0.02em;
+    color: var(--dim);
+    background: transparent;
+    border: 1px solid var(--line);
+    padding: 7px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  .resetBtn:hover{ color: var(--paper); border-color: var(--dim); }
+  .uploadName{
+    font-size: 12px; color: var(--dim);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 340px;
+  }
+  .dropActive .panel{
+    outline: 2px dashed var(--teal);
+    outline-offset: 4px;
+  }
+  .errorBanner{
+    display:none;
+    background: rgba(224,122,137,0.12);
+    border: 1px solid rgba(224,122,137,0.4);
+    color: var(--rose);
+    font-size: 12.5px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    margin-bottom: 16px;
+    white-space: pre-wrap;
+  }
+
+  .legend{
+    display:flex; flex-wrap: wrap; gap: 14px 22px;
+    margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--line);
+    font-size: 11.5px; color: var(--dim); letter-spacing: 0.02em;
+  }
+  .legend .item{ display:flex; align-items:center; gap: 7px; }
+  .legend .dot{ width: 9px; height: 9px; border-radius: 2px; display:inline-block; }
+
+  .stats{
+    display:flex; gap: 26px; margin-top: 18px; flex-wrap: wrap;
+  }
+  .stat{ }
+  .stat .n{ font-family:'Space Grotesk', sans-serif; font-size: 20px; font-weight: 700; color: var(--paper); }
+  .stat .l{ font-size: 11px; color: var(--dim); letter-spacing: 0.04em; text-transform: uppercase; }
+
+  ::selection{ background: rgba(95,201,184,0.25); }
+  ::-webkit-scrollbar{ height: 8px; width: 8px; }
+  ::-webkit-scrollbar-thumb{ background: var(--panel-line); border-radius: 4px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="brand">ast<span>→</span>src</div>
+    <div class="meta" id="fileMeta">parsing…</div>
+  </header>
+
+  <div class="uploadRow">
+    <label class="fileBtn" for="fileInput">Upload .txt</label>
+    <input type="file" id="fileInput" accept=".txt" hidden>
+    <span class="uploadName" id="uploadName">using bundled sample (power / main)</span>
+    <button class="resetBtn" id="resetBtn">reset to sample</button>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" data-view="src">Reconstructed Source</button>
+    <button class="tab" data-view="tree">Raw AST Tree</button>
+  </div>
+
+  <div class="errorBanner" id="errorBanner"></div>
+
+  <div class="panel">
+    <div id="srcView" class="codebox">
+      <div class="gutter" id="gutter"></div>
+      <div class="code" id="code"></div>
+    </div>
+    <div id="treeView" class="tree" style="display:none;"></div>
+  </div>
+
+  <div class="stats" id="stats"></div>
+
+  <div class="legend">
+    <div class="item"><span class="dot" style="background:var(--rose)"></span>keyword</div>
+    <div class="item"><span class="dot" style="background:var(--teal)"></span>type</div>
+    <div class="item"><span class="dot" style="background:var(--amber)"></span>function / operator</div>
+    <div class="item"><span class="dot" style="background:var(--paper)"></span>identifier</div>
+    <div class="item"><span class="dot" style="background:var(--violet)"></span>number</div>
+    <div class="item"><span class="dot" style="background:#c9d97a"></span>string</div>
+  </div>
+
+</div>
+
+<script>
+const AST_TEXT = String.raw`<NONE> Code
+    <FUNDEC> fn
+        <ID> power
+        <PARAMS>
+            <PARAM> def
+                <ID> x
+                <TYPE> int
+            <PARAM> def
+                <ID> y
+                <TYPE> int
+        <TYPE> int
+        <BLOCK>
+            <VARDEC> var
+                <ID> res
+                <TYPE> int
+                <NUM> 1
+            <VARDEC> var
+                <ID> it
+                <TYPE> int
+                <NUM> 0
+            <WHILESTMNT> while
+                <BIOP> <
+                    <ID> it
+                    <ID> y
+                <BLOCK>
+                    <ASSIGN> *=
+                        <ID> res
+                        <ID> x
+            <RETSTMNT> return
+                <ID> res
+    <FUNDEC> fn
+        <ID> main
+        <PARAMS>
+        <TYPE> int
+        <BLOCK>
+            <CALL> print
+                <ARG>
+                    <STR> "Hello, wold!\n"
+            <VARDEC> def
+                <ID> test1
+                <TYPE> short
+                <NUM> 32765
+            <VARDEC> def
+                <ID> test2
+                <TYPE> ushort
+                <NUM> 65534
+            <VARDEC> def
+                <ID> test3
+                <TYPE> int
+                <NUM> 2147483640
+            <VARDEC> def
+                <ID> test4
+                <TYPE> uint
+                <NUM> 4294967290
+            <VARDEC> def
+                <ID> test5
+                <TYPE> long
+                <NUM> 9223372036854775800
+            <VARDEC> def
+                <ID> test6
+                <TYPE> ulong
+                <NUM> 18446744073709551615
+            <CALL> print
+                <ARG>
+                    <STR> "print short :"
+                <ARG>
+                    <ID> test1
+                <ARG>
+                    <STR> "\n"
+            <CALL> print
+                <ARG>
+                    <STR> "print ushort :"
+                <ARG>
+                    <ID> test2
+                <ARG>
+                    <STR> "\n"
+            <CALL> print
+                <ARG>
+                    <STR> "print int :"
+                <ARG>
+                    <ID> test3
+                <ARG>
+                    <STR> "\n"
+            <CALL> print
+                <ARG>
+                    <STR> "print uint :"
+                <ARG>
+                    <ID> test4
+                <ARG>
+                    <STR> "\n"
+            <CALL> print
+                <ARG>
+                    <STR> "print long :"
+                <ARG>
+                    <ID> test5
+                <ARG>
+                    <STR> "\n"
+            <CALL> print
+                <ARG>
+                    <STR> "print ulong :"
+                <ARG>
+                    <ID> test6
+                <ARG>
+                    <STR> "\n"
+            <VARDEC> var
+                <ID> it
+                <TYPE> int
+                <NUM> 0
+            <WHILESTMNT> while
+                <BIOP> <
+                    <ID> it
+                    <NUM> 10
+                <BLOCK>
+                    <CALL> print
+                        <ARG>
+                            <ID> it
+                        <ARG>
+                            <STR> "\n"
+                    <ASSIGN> +=
+                        <ID> it
+                        <NUM> 1
+            <RETSTMNT> return
+                <NUM> 0
+`;
+
+// ---------- parse indentation tree ----------
+function parseAst(text){
+  const lines = text.split('\n');
+  const root = { tag:'ROOT', value:'', children:[] };
+  const stack = [{ indent:-1, node: root }];
+
+  for(const raw of lines){
+    const line = raw.replace(/\r$/,'');
+    if(!line.trim()) continue;
+    const m = line.match(/^(\s*)<(\S+)>\s?(.*)$/);
+    if(!m) continue;
+    const indent = m[1].length;
+    const node = { tag:m[2], value:m[3].trim(), children:[] };
+    while(stack.length && stack[stack.length-1].indent >= indent) stack.pop();
+    stack[stack.length-1].node.children.push(node);
+    stack.push({ indent, node });
+  }
+  return root;
+}
+
+function esc(s){
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+const kw   = s => `<span class="kw">${esc(s)}</span>`;
+const type = s => `<span class="type">${esc(s)}</span>`;
+const id   = s => `<span class="id">${esc(s)}</span>`;
+const fn   = s => `<span class="fn">${esc(s)}</span>`;
+const num  = s => `<span class="num">${esc(s)}</span>`;
+const str  = s => `<span class="str">${esc(s)}</span>`;
+const op   = s => `<span class="op">${esc(s)}</span>`;
+const punc = s => `<span class="punc">${esc(s)}</span>`;
+
+function find(node, tag){ return node.children.find(c => c.tag === tag); }
+function findAll(node, tag){ return node.children.filter(c => c.tag === tag); }
+
+// ---------- reconstruct pseudo-source ----------
+function renderExpr(node){
+  if(!node) return '';
+  switch(node.tag){
+    case 'ID':  return id(node.value);
+    case 'NUM': return num(node.value);
+    case 'STR': return str(node.value);
+    case 'BIOP':
+      return `${renderExpr(node.children[0])} ${op(node.value)} ${renderExpr(node.children[1])}`;
+    default:
+      return esc(node.value);
+  }
+}
+
+function renderStmt(node, level){
+  const pad = '    '.repeat(level);
+  switch(node.tag){
+    case 'VARDEC': {
+      const vId = find(node,'ID').value;
+      const vType = find(node,'TYPE').value;
+      const vNum = find(node,'NUM');
+      const initPart = vNum ? ` = ${renderExpr(vNum)}` : '';
+      return `${pad}${kw(node.value)} ${id(vId)}${punc(':')} ${type(vType)}${initPart}${punc(';')}`;
+    }
+    case 'WHILESTMNT': {
+      const cond = renderExpr(node.children[0]);
+      const block = find(node,'BLOCK');
+      return `${pad}${kw('while')} ${punc('(')}${cond}${punc(')')} ${renderBlock(block, level)}`;
+    }
+    case 'RETSTMNT': {
+      const expr = renderExpr(node.children[0]);
+      return `${pad}${kw('return')} ${expr}${punc(';')}`;
+    }
+    case 'CALL': {
+      const args = findAll(node,'ARG').map(a => renderExpr(a.children[0])).join(punc(', '));
+      return `${pad}${fn(node.value)}${punc('(')}${args}${punc(');')}`;
+    }
+    case 'ASSIGN': {
+      const target = id(node.children[0].value);
+      const expr = renderExpr(node.children[1]);
+      return `${pad}${target} ${op(node.value)} ${expr}${punc(';')}`;
+    }
+    default:
+      return `${pad}${renderExpr(node)}${punc(';')}`;
+  }
+}
+
+function renderBlock(node, level){
+  const inner = node.children.map(c => renderStmt(c, level+1)).join('\n');
+  const pad = '    '.repeat(level);
+  return `${punc('{')}\n${inner}\n${pad}${punc('}')}`;
+}
+
+function renderParams(node){
+  if(!node) return '';
+  return findAll(node,'PARAM').map(p => {
+    const pId = find(p,'ID').value;
+    const pType = find(p,'TYPE').value;
+    return `${id(pId)}${punc(':')} ${type(pType)}`;
+  }).join(punc(', '));
+}
+
+function renderFunDec(node, level){
+  const pad = '    '.repeat(level);
+  const name = find(node,'ID').value;
+  const params = renderParams(find(node,'PARAMS'));
+  const retType = find(node,'TYPE').value;
+  const block = find(node,'BLOCK');
+  return `${pad}${kw('fn')} ${fn(name)}${punc('(')}${params}${punc(')')} ${punc('->')} ${type(retType)} ${renderBlock(block, level)}`;
+}
+
+function renderProgram(program){
+  return findAll(program,'FUNDEC').map(f => renderFunDec(f, 0)).join('\n\n');
+}
+
+// ---------- raw tree view ----------
+function renderTree(node, depth){
+  const pad = '  '.repeat(depth);
+  const hot = ['FUNDEC','ID','TYPE','CALL','VARDEC'].includes(node.tag) ? 'hot' : '';
+  let out = '';
+  if(node.tag !== 'ROOT'){
+    out += `<div class="row"><span class="punc">${pad}</span><span class="tag ${hot}">&lt;${esc(node.tag)}&gt;</span> ${node.value ? (node.tag==='STR'?str(node.value):esc(node.value)) : ''}</div>`;
+  }
+  for(const c of node.children){
+    out += renderTree(c, node.tag === 'ROOT' ? depth : depth+1);
+  }
+  return out;
+}
+
+function countNodes(n){ return 1 + n.children.reduce((a,c)=>a+countNodes(c),0); }
+
+function showError(msg){
+  const el = document.getElementById('errorBanner');
+  if(!msg){ el.style.display = 'none'; el.textContent = ''; return; }
+  el.style.display = 'block';
+  el.textContent = msg;
+}
+
+function renderAll(text, label){
+  showError(null);
+  let tree, program, srcHtml;
+  try{
+    tree = parseAst(text);
+    program = tree.children[0];
+    if(!program || findAll(program,'FUNDEC').length === 0){
+      throw new Error('No <FUNDEC> nodes found under the root — check the file follows the expected <TAG> value / indentation format.');
+    }
+    srcHtml = renderProgram(program);
+  }catch(e){
+    showError('Could not fully reconstruct source from this file: ' + e.message + '\nFalling back to the raw tree view.');
+    // still try to show whatever tree we parsed, even if reconstruction failed
+    tree = tree || parseAst(text);
+    document.getElementById('treeView').innerHTML = renderTree(tree, 0);
+    document.getElementById('code').innerHTML = '';
+    document.getElementById('gutter').innerHTML = '';
+    document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
+    document.querySelector('.tab[data-view="tree"]').classList.add('active');
+    document.getElementById('srcView').style.display = 'none';
+    document.getElementById('treeView').style.display = 'block';
+    document.getElementById('fileMeta').textContent = `${label} · parse error`;
+    document.getElementById('stats').innerHTML = '';
+    return;
+  }
+
+  const codeEl = document.getElementById('code');
+  codeEl.innerHTML = srcHtml;
+
+  const lineCount = srcHtml.split('\n').length;
+  document.getElementById('gutter').innerHTML =
+    Array.from({length: lineCount}, (_,i) => `<div>${i+1}</div>`).join('');
+
+  document.getElementById('treeView').innerHTML = renderTree(tree, 0);
+
+  const funcCount = findAll(program,'FUNDEC').length;
+  const nodeCount = countNodes(tree) - 1;
+  document.getElementById('stats').innerHTML = `
+    <div class="stat"><div class="n">${funcCount}</div><div class="l">functions</div></div>
+    <div class="stat"><div class="n">${nodeCount}</div><div class="l">ast nodes</div></div>
+    <div class="stat"><div class="n">${lineCount}</div><div class="l">reconstructed lines</div></div>
+  `;
+  document.getElementById('fileMeta').textContent = `${label} · ${nodeCount} nodes`;
+}
+
+// ---------- initial render (bundled sample) ----------
+renderAll(AST_TEXT, 'ast.txt');
+
+// ---------- tabs ----------
+document.querySelectorAll('.tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    const view = btn.dataset.view;
+    document.getElementById('srcView').style.display = view === 'src' ? 'grid' : 'none';
+    document.getElementById('treeView').style.display = view === 'tree' ? 'block' : 'none';
+  });
+});
+
+// ---------- file upload ----------
+const fileInput = document.getElementById('fileInput');
+const uploadName = document.getElementById('uploadName');
+
+function loadFile(file){
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    uploadName.textContent = file.name;
+    renderAll(String(e.target.result), file.name);
+  };
+  reader.onerror = () => showError('Could not read that file.');
+  reader.readAsText(file);
+}
+
+fileInput.addEventListener('change', (e) => {
+  const file = e.target.files && e.target.files[0];
+  loadFile(file);
+});
+
+document.getElementById('resetBtn').addEventListener('click', () => {
+  uploadName.textContent = 'using bundled sample (power / main)';
+  fileInput.value = '';
+  renderAll(AST_TEXT, 'ast.txt');
+});
+
+// drag & drop anywhere on the page
+['dragover','dragenter'].forEach(evt => {
+  document.addEventListener(evt, (e) => {
+    e.preventDefault();
+    document.body.classList.add('dropActive');
+  });
+});
+['dragleave','drop'].forEach(evt => {
+  document.addEventListener(evt, (e) => {
+    if(evt === 'drop') e.preventDefault();
+    document.body.classList.remove('dropActive');
+  });
+});
+document.addEventListener('drop', (e) => {
+  e.preventDefault();
+  const file = e.dataTransfer.files && e.dataTransfer.files[0];
+  if(file) loadFile(file);
+});
+</script>
+</body>
+</html>

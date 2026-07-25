@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Tree Visualizer</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            --page-bg: #eef0f2;
+            /* soft light gray, easy on the eyes */
+            --panel-bg: #f6f7f8;
+            --border: #d7dade;
+            --border-soft: #e2e4e7;
+            --text: #20242b;
+            --text-dim: #767c87;
+            --node-fill: #ffffff;
+            --node-border: #c7cbd1;
+            --line: #1a1a1a;
+            --accent: #4457e6;
+            --accent-soft: #e7eafc;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            height: 100%;
+        }
+
+        body {
+            margin: 0;
+            background: var(--page-bg);
+            color: var(--text);
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* ---------- Sidebar ---------- */
+        #sidebar {
+            width: 320px;
+            min-width: 320px;
+            background: var(--panel-bg);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            padding: 22px 20px;
+            gap: 14px;
+            overflow-y: auto;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 9px;
+            margin-bottom: 2px;
+        }
+
+        .brand .mark {
+            width: 11px;
+            height: 11px;
+            border-radius: 3px;
+            background: var(--accent);
+            flex: none;
+        }
+
+        h1 {
+            font-size: 18px;
+            font-weight: 700;
+            margin: 0;
+            letter-spacing: -0.01em;
+        }
+
+        .sub {
+            font-size: 12.5px;
+            color: var(--text-dim);
+            line-height: 1.55;
+            margin: 0 0 2px 0;
+        }
+
+        label.field-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.07em;
+            color: var(--text-dim);
+            font-weight: 600;
+            margin-bottom: 6px;
+            display: block;
+        }
+
+        textarea {
+            width: 100%;
+            height: 250px;
+            background: #ffffff;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12.5px;
+            line-height: 1.6;
+            padding: 12px;
+            resize: vertical;
+            tab-size: 4;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-soft);
+        }
+
+        .hint {
+            font-size: 11px;
+            color: var(--text-dim);
+            line-height: 1.55;
+        }
+
+        .hint code {
+            background: #ffffff;
+            border: 1px solid var(--border-soft);
+            padding: 1px 5px;
+            border-radius: 4px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        button#draw {
+            background: var(--accent);
+            color: white;
+            border: none;
+            padding: 11px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 13.5px;
+            font-family: 'Inter', sans-serif;
+            transition: filter .12s ease, transform .12s ease;
+        }
+
+        button#draw:hover {
+            filter: brightness(1.08);
+            transform: translateY(-1px);
+        }
+
+        button#draw:active {
+            transform: translateY(0);
+        }
+
+        .toolbar {
+            display: flex;
+            gap: 8px;
+            margin-top: 2px;
+        }
+
+        .tbtn {
+            flex: 1;
+            background: #ffffff;
+            border: 1px solid var(--border);
+            color: var(--text-dim);
+            padding: 8px 10px;
+            border-radius: 7px;
+            cursor: pointer;
+            font-size: 12px;
+            font-family: 'Inter', sans-serif;
+            font-weight: 500;
+            transition: all .12s ease;
+        }
+
+        .tbtn:hover {
+            color: var(--text);
+            border-color: var(--accent);
+        }
+
+        .stats {
+            margin-top: auto;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            padding-top: 14px;
+            border-top: 1px solid var(--border);
+        }
+
+        .stat {
+            background: #ffffff;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px 12px;
+        }
+
+        .stat .n {
+            font-size: 19px;
+            font-weight: 700;
+            color: var(--accent);
+        }
+
+        .stat .l {
+            font-size: 10.5px;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-top: 2px;
+        }
+
+        /* ---------- Canvas ---------- */
+        #canvas-wrap {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+            background:
+                radial-gradient(circle at 1px 1px, #dfe2e6 1px, transparent 1px) 0 0/22px 22px,
+                var(--page-bg);
+        }
+
+        svg#tree {
+            width: 100%;
+            height: 100%;
+            display: block;
+            cursor: grab;
+        }
+
+        svg#tree:active {
+            cursor: grabbing;
+        }
+
+        .link {
+            stroke: var(--line);
+            stroke-width: 1.4px;
+            fill: none;
+        }
+
+        .node rect {
+            fill: var(--node-fill);
+            stroke: var(--node-border);
+            stroke-width: 1.3px;
+            cursor: pointer;
+            transition: stroke .15s ease, filter .15s ease;
+        }
+
+        .node:hover rect {
+            stroke: var(--accent);
+            filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.08));
+        }
+
+        .node text {
+            font-family: 'Inter', sans-serif;
+            font-size: 12px;
+            font-weight: 500;
+            fill: var(--text);
+            pointer-events: none;
+            text-anchor: middle;
+        }
+
+        .node .collapse-badge {
+            fill: var(--accent);
+            stroke: #ffffff;
+            stroke-width: 2px;
+        }
+
+        .node .collapse-badge-text {
+            font-family: 'Inter', sans-serif;
+            font-size: 9px;
+            font-weight: 700;
+            fill: #ffffff;
+            text-anchor: middle;
+            pointer-events: none;
+        }
+
+        #empty-state {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-dim);
+            font-size: 13px;
+            pointer-events: none;
+        }
+
+        #zoom-controls {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        #zoom-controls button {
+            width: 34px;
+            height: 34px;
+            background: #ffffff;
+            border: 1px solid var(--border);
+            color: var(--text);
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 3px 8px rgba(0, 0, 0, 0.06);
+        }
+
+        #zoom-controls button:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="sidebar">
+        <div class="brand">
+            <div class="mark"></div>
+            <h1>Tree Visualizer</h1>
+        </div>
+        <p class="sub">Paste an indented outline. Each deeper level of indentation becomes a child node.</p>
+
+        <div>
+            <label class="field-label">Outline</label>
+            <textarea id="input" spellcheck="false">node 0
+    node 1
+        node 14
+        node 15
+    node 2
+        node 24
+        node 25
+    node 3</textarea>
+        </div>
+
+        <p class="hint">Indent with spaces or tabs — any consistent step works. Click a rectangle to collapse or expand
+            its branch.</p>
+
+        <button id="draw">Visualize tree</button>
+        <div class="toolbar">
+            <button class="tbtn" id="fit">Fit to screen</button>
+            <button class="tbtn" id="expand-all">Expand all</button>
+        </div>
+
+        <div class="stats">
+            <div class="stat">
+                <div class="n" id="stat-nodes">–</div>
+                <div class="l">Nodes</div>
+            </div>
+            <div class="stat">
+                <div class="n" id="stat-depth">–</div>
+                <div class="l">Depth</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="canvas-wrap">
+        <svg id="tree"></svg>
+        <div id="empty-state">Paste an outline and click "Visualize tree".</div>
+        <div id="zoom-controls">
+            <button id="zoom-in">+</button>
+            <button id="zoom-out">−</button>
+        </div>
+    </div>
+
+    <script>
+        // ---------- Label formatting ----------
+        // Rule: max one line break, inserted near the 15-char mark (at a word
+        // boundary when possible). Overall text capped at 40 chars, with "..."
+        // appended when truncated.
+        const BREAK_AT = 15;
+        const MAX_CHARS = 40;
+
+        function formatLabel(raw) {
+            let t = raw.length > MAX_CHARS ? raw.slice(0, MAX_CHARS - 3) + '...' : raw;
+            if (t.length <= BREAK_AT) return [t];
+
+            let breakAt = BREAK_AT;
+            const spaceIdx = t.lastIndexOf(' ', BREAK_AT);
+            if (spaceIdx > 4) breakAt = spaceIdx; // avoid breaking too early
+
+            const line1 = t.slice(0, breakAt).trim();
+            const line2 = t.slice(breakAt).trim();
+            return line2 ? [line1, line2] : [line1];
+        }
+
+        // ---------- Parsing ----------
+        function parseTree(text) {
+            const rawLines = text.split('\n').map(l => l.replace(/\t/g, '    ').replace(/\s+$/, ''));
+            const lines = rawLines.filter(l => l.trim().length);
+            if (!lines.length) return null;
+
+            const indents = lines.map(l => l.match(/^ */)[0].length);
+            const nonZero = indents.filter(n => n > 0);
+            const unit = nonZero.length ? Math.min(...nonZero) : 1;
+
+            const items = lines.map((l, i) => ({
+                name: l.trim(),
+                depth: Math.round(indents[i] / unit)
+            }));
+
+            const minDepth = Math.min(...items.map(i => i.depth));
+            items.forEach(i => i.depth -= minDepth);
+
+            const root = { name: '', children: [], synthetic: true };
+            const stack = [{ depth: -1, node: root }];
+
+            for (const item of items) {
+                const node = { name: item.name, children: [] };
+                while (stack.length > 1 && stack[stack.length - 1].depth >= item.depth) stack.pop();
+                stack[stack.length - 1].node.children.push(node);
+                stack.push({ depth: item.depth, node });
+            }
+
+            return root.children.length === 1 ? root.children[0] : root;
+        }
+
+        // ---------- Rendering ----------
+        const RECT_W = 180, RECT_H = 56;
+        const SIB_SPACING = 210, LEVEL_SPACING = 110;
+
+        let svg, g, zoomBehavior, root, treeLayout, nodeIdCounter = 0;
+        const svgEl = document.getElementById('tree');
+        const wrap = document.getElementById('canvas-wrap');
+
+        function drawTree() {
+            const text = document.getElementById('input').value;
+            const data = parseTree(text);
+            document.getElementById('empty-state').style.display = data ? 'none' : 'flex';
+            if (!data) return;
+
+            d3.select('#tree').selectAll('*').remove();
+
+            const width = wrap.clientWidth, height = wrap.clientHeight;
+            svg = d3.select('#tree').attr('width', width).attr('height', height);
+            g = svg.append('g');
+
+            zoomBehavior = d3.zoom()
+                .scaleExtent([0.2, 2.5])
+                .on('zoom', (event) => g.attr('transform', event.transform));
+            svg.call(zoomBehavior);
+
+            root = d3.hierarchy(data);
+            root.x0 = 0;
+            root.y0 = 0;
+
+            root.descendants().forEach(d => {
+                if (d.depth >= 2 && d.children) {
+                    d._children = d.children;
+                    d.children = null;
+                }
+            });
+
+            treeLayout = d3.tree().nodeSize([SIB_SPACING, LEVEL_SPACING + RECT_H]);
+
+            update(root);
+            fitToScreen();
+
+            document.getElementById('stat-nodes').textContent = countAllNodes(data);
+            document.getElementById('stat-depth').textContent = maxDepthOf(data);
+        }
+
+        function countAllNodes(d) {
+            let c = d.synthetic ? 0 : 1;
+            if (d.children) d.children.forEach(ch => c += countAllNodes(ch));
+            return c;
+        }
+        function maxDepthOf(d, depth = 0) {
+            if (!d.children || !d.children.length) return d.synthetic ? 0 : depth;
+            return Math.max(...d.children.map(ch => maxDepthOf(ch, d.synthetic ? 0 : depth + 1)));
+        }
+
+        function update(source) {
+            const treeData = treeLayout(root);
+            const nodes = treeData.descendants();
+            const links = treeData.links();
+
+            // straight vertical connector: bottom-center of parent -> top-center of child
+            const linkPath = d => {
+                const px = d.source.x, py = d.source.y + RECT_H / 2;
+                const cx = d.target.x, cy = d.target.y - RECT_H / 2;
+                return `M${px},${py}L${cx},${cy}`;
+            };
+            const linkPathFrom = (x, y) => `M${x},${y}L${x},${y}`;
+
+            // ----- Links -----
+            const link = g.selectAll('path.link')
+                .data(links, d => d.target.id || (d.target.id = ++nodeIdCounter));
+
+            const linkEnter = link.enter().insert('path', 'g')
+                .attr('class', 'link')
+                .attr('d', () => linkPathFrom(source.x0 ?? 0, (source.y0 ?? 0)));
+
+            linkEnter.merge(link)
+                .transition().duration(350)
+                .attr('d', linkPath);
+
+            link.exit().transition().duration(250)
+                .attr('d', () => linkPathFrom(source.x, source.y))
+                .remove();
+
+            // ----- Nodes -----
+            const node = g.selectAll('g.node')
+                .data(nodes, d => d.id || (d.id = ++nodeIdCounter));
+
+            const nodeEnter = node.enter().append('g')
+                .attr('class', 'node')
+                .attr('transform', () => `translate(${source.x0 ?? 0},${(source.y0 ?? 0) - RECT_H / 2})`)
+                .style('opacity', d => d.data.synthetic ? 0 : 1)
+                .on('click', (event, d) => {
+                    if (d.data.synthetic) return;
+                    if (d.children) { d._children = d.children; d.children = null; }
+                    else if (d._children) { d.children = d._children; d._children = null; }
+                    update(d);
+                });
+
+            nodeEnter.append('rect')
+                .attr('width', RECT_W)
+                .attr('height', RECT_H)
+                .attr('x', -RECT_W / 2)
+                .attr('y', 0)
+                .attr('rx', 6);
+
+            nodeEnter.append('text')
+                .attr('x', 0)
+                .attr('y', RECT_H / 2)
+                .style('fill-opacity', 0);
+
+            const merged = nodeEnter.merge(node);
+
+            merged.transition().duration(350)
+                .attr('transform', d => `translate(${d.x},${d.y - RECT_H / 2})`)
+                .style('opacity', d => d.data.synthetic ? 0 : 1);
+
+            merged.select('text')
+                .transition().duration(350)
+                .style('fill-opacity', 1)
+                .tween('text', function (d) {
+                    const el = d3.select(this);
+                    return function () {
+                        const lines = formatLabel(d.data.name || '');
+                        el.selectAll('tspan').remove();
+                        if (lines.length === 1) {
+                            el.attr('y', RECT_H / 2).attr('dy', '.35em').text(lines[0]);
+                        } else {
+                            el.text(null);
+                            el.append('tspan').attr('x', 0).attr('y', RECT_H / 2 - 8).text(lines[0]);
+                            el.append('tspan').attr('x', 0).attr('y', RECT_H / 2 + 10).text(lines[1]);
+                        }
+                    };
+                });
+
+            // collapse badge
+            merged.selectAll('.collapse-badge, .collapse-badge-text').remove();
+            merged.filter(d => d._children).each(function (d) {
+                const gSel = d3.select(this);
+                gSel.append('circle')
+                    .attr('class', 'collapse-badge')
+                    .attr('r', 8)
+                    .attr('cx', 0).attr('cy', RECT_H + 2);
+                gSel.append('text')
+                    .attr('class', 'collapse-badge-text')
+                    .attr('x', 0).attr('y', RECT_H + 5)
+                    .text(d => d._children.length);
+            });
+
+            node.exit().transition().duration(250)
+                .attr('transform', () => `translate(${source.x},${source.y - RECT_H / 2})`)
+                .style('opacity', 0)
+                .remove();
+
+            nodes.forEach(d => { d.x0 = d.x; d.y0 = d.y; });
+        }
+
+        function fitToScreen() {
+            if (!root) return;
+            const bounds = g.node().getBBox();
+            const width = wrap.clientWidth, height = wrap.clientHeight;
+            if (bounds.width === 0 || bounds.height === 0) return;
+            const scale = Math.min(0.92 * width / bounds.width, 0.92 * height / bounds.height, 1.1);
+            const tx = width / 2 - scale * (bounds.x + bounds.width / 2);
+            const ty = height / 2 - scale * (bounds.y + bounds.height / 2);
+            svg.transition().duration(400)
+                .call(zoomBehavior.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
+        }
+
+        function expandAll() {
+            if (!root) return;
+            root.descendants().forEach(d => {
+                if (d._children) { d.children = d._children; d._children = null; }
+            });
+            update(root);
+            fitToScreen();
+        }
+
+        document.getElementById('draw').addEventListener('click', drawTree);
+        document.getElementById('fit').addEventListener('click', fitToScreen);
+        document.getElementById('expand-all').addEventListener('click', expandAll);
+        document.getElementById('zoom-in').addEventListener('click', () => svg.transition().call(zoomBehavior.scaleBy, 1.3));
+        document.getElementById('zoom-out').addEventListener('click', () => svg.transition().call(zoomBehavior.scaleBy, 1 / 1.3));
+
+        window.addEventListener('resize', () => {
+            if (svg) svg.attr('width', wrap.clientWidth).attr('height', wrap.clientHeight);
+        });
+
+        drawTree();
+    </script>
+
+</body>
+
+</html>
