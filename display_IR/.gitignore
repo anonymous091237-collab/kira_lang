@@ -1,0 +1,77 @@
+# ==============================
+# Build directories
+# ==============================
+build/
+**/build/
+
+# ==============================
+# CMake generated files
+# ==============================
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+compile_commands.json
+CTestTestfile.cmake
+_install/
+
+# CMake system information
+__cmake_systeminformation/
+
+# ==============================
+# Compiled binaries / objects
+# ==============================
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.dll
+*.dylib
+*.exe
+
+# ==============================
+# Debug / release output
+# ==============================
+Debug/
+Release/
+debug/
+release/
+
+# ==============================
+# IDEs
+# ==============================
+
+# JetBrains / CLion
+.idea/
+
+# VS Code
+.vscode/
+
+# Zed
+.zed/
+
+# ==============================
+# Language Server caches
+# ==============================
+.cache/
+**/.cache/
+
+# ==============================
+# clangd
+# ==============================
+.clangd/
+**/.clangd/
+
+# ==============================
+# NeoCMake LSP
+# ==============================
+.neocmakelsp/
+**/.neocmakelsp/
+
+# ==============================
+# OS files
+# ==============================
+.DS_Store
+Thumbs.db
+desktop.ini

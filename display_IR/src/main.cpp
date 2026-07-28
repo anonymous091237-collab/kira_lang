@@ -4,9 +4,10 @@
 #include <string>
 #include <vector>
 
-#include "src/reader.hpp"
+#include "reader.hpp"
 
-int main(int argc, char* argv[]) {
+int main(int argc, char *argv[]) {
+
     if (argc < 2) {
         std::cerr << "How to use:\n\treadIR <input.bin> [output.txt]\n\t"
                      "readIR <input.bin> (printed to console)\n";
@@ -25,27 +26,28 @@ int main(int argc, char* argv[]) {
 
     inputFile.close();
 
-    std::ofstream ouputFile;
+    std::ofstream ouput_file;
     if (argc >= 3) {
-        ouputFile.open(argv[2]);
-        if (!ouputFile) {
+        ouput_file.open(argv[2]);
+        if (!ouput_file) {
             std::cerr << "Error: cannot open '" << argv[2] << "' for writing\n";
             return 1;
         }
     }
-    std::ostream& out = (argc >= 3) ? ouputFile : std::cout;
+    std::ostream &out = (argc >= 3) ? ouput_file : std::cout;
 
     try {
-        Reader r(buffer);
+        Reader reader(buffer);
 
         out << "; IR disassembly of: " << argv[1] << "\n\n";
-        r.disassemble(out);
-    } catch (const std::exception& e) {
+        reader.disassemble(out);
+    } catch (const std::exception &e) {
         std::cerr << "Parse error: " << e.what() << '\n';
         return 1;
     }
 
-    if (argc >= 3) std::cerr << "Written to " << argv[2] << '\n';
-
+    if (argc >= 3) {
+        std::cerr << "Written to " << argv[2] << '\n';
+    }
     return 0;
 }
