@@ -1,0 +1,36 @@
+fn add(def a:int, def b:int) :int {
+    return a + b;
+}
+
+fn square(def x:int) :int {
+    return x * x;
+}
+
+fn count(def limit:int) :int {
+    var i:int = 0;
+
+    while i < limit {
+        print(i, " ");
+        i += 1;
+    }
+
+    print("\n");
+    return limit;
+}
+
+fn main() :int {
+    print("Hello, Kira!\n");
+
+    var x:int = add(5, 3);
+    var y:int = square(x);
+
+    print("x = ", x, "\n");
+    print("y = ", y, "\n");
+
+    count(5);
+
+    var z:int = add(square(2), square(3));
+    print("z = ", z, "\n");
+
+    return 0;
+}

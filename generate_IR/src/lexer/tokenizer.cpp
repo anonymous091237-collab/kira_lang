@@ -4,7 +4,7 @@
 #include <iostream>
 #include <sstream>
 
-Tokenizer::Tokenizer(const std::string& filepath) {
+Tokenizer::Tokenizer(const std::string &filepath) {
     std::ifstream file(filepath);
 
     if (!file.is_open()) {
@@ -17,7 +17,7 @@ Tokenizer::Tokenizer(const std::string& filepath) {
     fileContent = buffer.str();
 }
 
-void Tokenizer::flush(CheckRepeat& rep) {
+void Tokenizer::flush(CheckRepeat &rep) {
     if (tokenHead != p) {
         std::string_view word(tokenHead, p - tokenHead);
         TokenType type = TokenType::None;
@@ -42,19 +42,21 @@ void Tokenizer::flush(CheckRepeat& rep) {
     tokenHead = p;
 }
 
-bool alpha_(const char& c) {
+static bool alpha_(const char &c) {
     return ((c == '_') || ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z'));
 }
 
-bool alphanum_(const char& c) {
+static bool alphanum_(const char &c) {
     return ((c == '_') || ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') ||
             ('0' <= c && c <= '9'));
 }
 
 bool Tokenizer::isIdentifier(std::string_view string) {
-    if (!alpha_((string[0]))) return false;
-    for (auto& c : string) {
-        if (!alphanum_(c)) return false;
+    if (!alpha_((string[0])))
+        return false;
+    for (auto &c : string) {
+        if (!alphanum_(c))
+            return false;
     }
     return true;
 }
@@ -81,14 +83,16 @@ bool Tokenizer::isChar(std::string_view string) {
 }
 
 bool Tokenizer::isNumber(std::string_view string) {
-    for (auto& c : string) {
-        if (c < '0' || c > '9') return false;
+    for (auto &c : string) {
+        if (c < '0' || c > '9')
+            return false;
     }
     return true;
 }
 
 bool Tokenizer::isString(std::string_view string) {
-    if (string.size() < 2) return false;
+    if (string.size() < 2)
+        return false;
     if (string[0] == '"' && string.back() == '"') {
         return true;
     }
@@ -113,11 +117,12 @@ bool isSingleOperator(char a) {
            a == '#' || a == '&' || a == '|' || a == ';' || a == ',' ||
            a == '(' || a == ')' || a == '{' || a == '}' || a == '[' || a == ']';
 }
-bool Tokenizer::tokenizeComment(char a, char b, CheckRepeat& rep) {
+bool Tokenizer::tokenizeComment(char a, char b, CheckRepeat &rep) {
     if (a == '/' && b == '/') {
         flush(rep);
 
-        while (p < end && *p != '\n') p++;
+        while (p < end && *p != '\n')
+            p++;
 
         if (p < end) {
             p++;
@@ -132,11 +137,11 @@ bool Tokenizer::tokenizeComment(char a, char b, CheckRepeat& rep) {
     if (a == '/' && b == '*') {
         flush(rep);
 
-        p += 2;  // consume /*
+        p += 2; // consume /*
 
         while (p < end - 1) {
             if (*p == '*' && *(p + 1) == '/') {
-                p += 2;  // consume */
+                p += 2; // consume */
                 tokenHead = p;
                 return true;
             }
@@ -155,7 +160,7 @@ bool Tokenizer::tokenizeComment(char a, char b, CheckRepeat& rep) {
     return false;
 }
 
-bool Tokenizer::tokenizePairOp(char a, char b, CheckRepeat& rep) {
+bool Tokenizer::tokenizePairOp(char a, char b, CheckRepeat &rep) {
     if (isPairOperator(a, b)) {
         flush(rep);
         tokens.push_back(createToken(std::string_view(tokenHead, 2), rep,
@@ -168,7 +173,7 @@ bool Tokenizer::tokenizePairOp(char a, char b, CheckRepeat& rep) {
     }
     return false;
 }
-bool Tokenizer::tokenizeString(char a, CheckRepeat& rep) {
+bool Tokenizer::tokenizeString(char a, CheckRepeat &rep) {
     if (a == '"' || a == '\'') {
         char expectedEnd = a;
 
@@ -204,7 +209,7 @@ bool Tokenizer::tokenizeString(char a, CheckRepeat& rep) {
     }
     return false;
 }
-bool Tokenizer::tokenizeUinOp(char a, CheckRepeat& rep) {
+bool Tokenizer::tokenizeUinOp(char a, CheckRepeat &rep) {
     std::string_view sv(p, 1);
 
     if (isSingleOperator(a)) {
@@ -224,7 +229,7 @@ bool Tokenizer::tokenizeUinOp(char a, CheckRepeat& rep) {
     }
     return false;
 }
-bool Tokenizer::tokenizeNum(char a, CheckRepeat& rep) {
+bool Tokenizer::tokenizeNum(char a, CheckRepeat &rep) {
     if ('0' <= a && a <= '9' && tokenHead == p) {
         flush(rep);
         p++;
@@ -257,7 +262,7 @@ bool Tokenizer::tokenizeNum(char a, CheckRepeat& rep) {
     return false;
 }
 
-bool Tokenizer::tokenizeSpecial(char a, CheckRepeat& rep) {
+bool Tokenizer::tokenizeSpecial(char a, CheckRepeat &rep) {
     if (a == '\n') {
         flush(rep);
         pos.line++;
@@ -302,21 +307,27 @@ void Tokenizer::run() {
             b = *(p + 1);
 
             // handle comments
-            if (tokenizeComment(a, b, rep)) continue;
+            if (tokenizeComment(a, b, rep))
+                continue;
             // handle pair operators
-            if (tokenizePairOp(a, b, rep)) continue;
+            if (tokenizePairOp(a, b, rep))
+                continue;
         }
 
         // handle strings and chars
-        if (tokenizeString(a, rep)) continue;
+        if (tokenizeString(a, rep))
+            continue;
 
         // handle single operators or chars that are not alphanum
-        if (tokenizeUinOp(a, rep)) continue;
+        if (tokenizeUinOp(a, rep))
+            continue;
         // handle numbers and floats
-        if (tokenizeNum(a, rep)) continue;
+        if (tokenizeNum(a, rep))
+            continue;
 
         // handle special characters \n \t " "
-        if (tokenizeSpecial(a, rep)) continue;
+        if (tokenizeSpecial(a, rep))
+            continue;
         p++;
     }
 
@@ -324,73 +335,34 @@ void Tokenizer::run() {
     std::cout << "Tokenization finished successfully!\n";
     std::ofstream outputFile(".\\k_build\\tokens.txt");
 
-    for (const auto& t : tokens) {
-        outputFile << std::string_view((char*)tokensAdr + t.id + 1)
+    for (const auto &t : tokens) {
+        outputFile << std::string_view((char *)tokensAdr + t.id + 1)
                    << std::endl;
     }
 
     outputFile.close();
 }
 
-/*void Tokenizer::FillKeywordTable(std::unordered_map<std::string_view, int>
-&avoidRepetition)
-{
-    static constexpr std::string_view keywordnames[] = {"if", "else", "while",
-"fn", "var", "let", "return"};
-
-    avoidRepetition.reserve(7);
-
-    uint8_t *base = static_cast<uint8_t *>(tokensAdr);
-
-    int i = 0;
-
-    for (const auto &keyword : keywordnames) {
-        size_t needed = offset + keyword.size() + 2;
-
-        if (needed >= max) {
-            while (max < needed)
-                max *= 2;
-
-            tokensAdr = realloc(tokensAdr, max);
-            base = static_cast<uint8_t *>(tokensAdr);
-        }
-
-        avoidRepetition[keyword] = offset;
-
-        uint8_t *cursor = base + offset;
-
-        *cursor++ = static_cast<uint8_t>(TokenType::Keyword);
-
-        memcpy(cursor, keyword.data(), keyword.size());
-        cursor += keyword.size();
-
-        *cursor = '\0';
-
-        KeywordTable[i++] = offset;
-        offset += keyword.size() + 2;
-    }
-}
-*/
 Token Tokenizer::createToken(std::string_view string,
-                             CheckRepeat& avoidRepetition, TokenType type) {
+                             CheckRepeat &avoidRepetition, TokenType type) {
     Token n;
     n.pos.chr = pos.chr;
     n.pos.line = pos.line;
-    // pos.index = fileContent.data() - p;
+
     n.pos.index = static_cast<uint32_t>(p - fileContent.data());
-    ;
 
     if (avoidRepetition.contains(string)) {
         n.id = avoidRepetition.at(string);
     } else {
         size_t needed = offset + string.size() + 2;
         if (needed >= max) {
-            while (max < needed) max *= 2;
+            while (max < needed)
+                max *= 2;
             tokensAdr = realloc(tokensAdr, sizeof(char) * max);
         }
-        uint8_t* base = static_cast<uint8_t*>(tokensAdr);
+        uint8_t *base = static_cast<uint8_t *>(tokensAdr);
         avoidRepetition[string] = offset;
-        uint8_t* cursor = base + offset;
+        uint8_t *cursor = base + offset;
         n.id = offset;
 
         *cursor++ = static_cast<uint8_t>(type);
@@ -399,7 +371,7 @@ Token Tokenizer::createToken(std::string_view string,
 
         *cursor = '\0';
 
-        offset += string.size() + 2;  // 1 for \0 and one byte for the TokenType
+        offset += string.size() + 2; // 1 for \0 and one byte for the TokenType
     }
 
     return n;

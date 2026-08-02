@@ -1,0 +1,531 @@
+#include "convert.hpp"
+#include "binary_ir.hpp"
+#include <cstddef>
+#include <filesystem>
+#include <fstream>
+#include <iostream>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <vector>
+
+Type str_to_type(const std::string_view &src) {
+
+  auto idx = typeHashMap.find(src);
+  if (idx == typeHashMap.end()) {
+    throw std::runtime_error("unvalide binary operator!");
+  }
+  return idx->second;
+}
+
+OP str_to_unop(const std::string_view &src) {
+  if (src == "-") {
+    return OP::NEG;
+  }
+  throw std::runtime_error("unvalide unary operator!");
+}
+
+OP str_to_biop(const std::string_view &src) {
+
+  auto idx = biopHashMap.find(src);
+  if (idx == biopHashMap.end()) {
+    throw std::runtime_error("unvalide binary operator!");
+  }
+  return idx->second;
+}
+
+Id Converter::createTemp() { return static_cast<Id>(idCounter++); }
+
+Id Converter::get_id(string_view input) {
+
+  const auto it = my_variables.find(input);
+  if (it == my_variables.end()) {
+
+    const auto result = static_cast<Id>(idCounter++);
+    my_variables[input] = result;
+    return result;
+  }
+  return it->second;
+}
+
+Id Converter::get_fn(string_view input) {
+
+  const auto it = my_functions.find(input);
+  if (it == my_functions.end()) {
+
+    const auto result = static_cast<Id>(fnCounter++);
+    my_functions[input] = result;
+    return result;
+  }
+  return it->second;
+}
+
+void checkItemSize(size_t base_idx, std::vector<Reusable> &items) {
+  if (base_idx + 1 > items.size()) {
+    size_t requierd = items.size() == 0 ? 2 : items.size();
+    while (base_idx + 1 > requierd) {
+      requierd *= 2;
+    }
+    items.resize(requierd);
+  }
+}
+
+bool Converter::gen_operand(const Node &node, Reusable &item) {
+  if (node->type == NodeType::ID) {
+    item.set_var(get_id(node->name));
+    return true;
+  }
+  if (node->type == NodeType::NUM) {
+    item.set_num(node->name);
+    return true;
+  }
+  if (node->type == NodeType::STR) {
+    item.set_str(string_view{node->name.data() + 1, node->name.size() - 2});
+    return true;
+  }
+  return false;
+}
+
+void Converter::gen_biop(const Node &node, size_t base_idx, size_t src) {
+
+  const auto right = base_idx + 1;
+  const auto left = base_idx;
+  const auto newBase = base_idx + 2;
+
+  auto *current = node;
+
+  struct PendingOp {
+    OP op;
+    Node right;
+  };
+
+  std::vector<PendingOp> ops;
+
+  // collect all ops and right children going left
+  while (current->type == NodeType::BIOP) {
+    const auto rightExpr = *Tree::getChild(current, 2);
+    const auto operation = str_to_biop(current->name);
+
+    ops.push_back({.op = operation, .right = rightExpr});
+    current = *Tree::getChild(current, 1);
+  }
+
+  // it is now the leftmost leaf
+  gen_expression(current, left, newBase);
+
+  // emit in reverse (left to right)
+  for (auto it = ops.rbegin(); it != ops.rend(); ++it) {
+
+    gen_expression(it->right, right, newBase);
+
+    const auto temp = createTemp();
+
+    append_op(IR_array, it->op);
+    item[left].write_to(IR_array);
+    item[right].write_to(IR_array);
+    append_id(IR_array, temp);
+    item[src].set_var(temp);
+    item[left].set_var(temp);
+  }
+}
+
+void Converter::std_print(const Node &node, size_t src, size_t base_idx) {
+
+  Node arg = node->child;
+
+  while (arg != nullptr) {
+
+    append_op(IR_array, OP::CALL);
+    append_op(IR_array, OP::STD);
+    append_std(IR_array, std_lib::PRINT);
+
+    gen_expression(arg->child, src, base_idx + 1);
+
+    item[src].write_to(IR_array);
+
+    arg = arg->sibling;
+  }
+}
+
+void Converter::gen_call(const Node &node, size_t src, size_t base_idx) {
+
+  const auto &functionName = node->name;
+
+  const uint8_t arg_count = Tree::countChild(node);
+
+  if (const auto it = std_functions.find(functionName);
+      it != std_functions.end()) {
+    const auto std_type = it->second;
+    if (std_type == std_lib::PRINT) // only supports int rn
+    {
+      std_print(node, src, base_idx);
+    }
+
+    return;
+  } else if (const auto it = my_functions.find(functionName);
+             it != my_functions.end()) {
+
+    const auto functionId = it->second;
+
+    // Evaluate each arg into its own slot to avoid clobbering
+    for (int i = 0; i < arg_count; i++) {
+      const size_t arg_slot = base_idx + 1 + i;
+      checkItemSize(arg_slot + 1, item);
+      Node arg = *Tree::getChild(*Tree::getChild(node, i + 1), 1);
+      gen_expression(arg, arg_slot, base_idx + 1 + arg_count);
+    }
+
+    // Now emit CALL with all args stable
+    append_op(IR_array, OP::CALL);
+    append_op(IR_array, OP::USR);
+    append_id(IR_array, functionId);
+    IR_array.push_back(arg_count);
+
+    for (int i = 0; i < arg_count; i++) {
+      item[base_idx + 1 + i].write_to(IR_array);
+    }
+
+    const Id result = createTemp();
+    item[src].set_var(result);
+    append_id(IR_array, result);
+    return;
+  }
+  throw std::runtime_error("unknown function!");
+}
+void Converter::gen_assign(const Node &node, size_t base_idx, size_t src) {
+
+  // regular assignment
+  const auto right = base_idx + 1;
+  const auto left = base_idx;
+  const auto newBase = base_idx + 2;
+
+  auto *const leftExpr = *Tree::getChild(node, 1);
+  auto *const rightExpr = *Tree::getChild(node, 2);
+
+  //==============================================
+  gen_expression(leftExpr, left, newBase);
+  gen_expression(rightExpr, right, newBase);
+  //==============================================
+  if (node->name[0] == '=') {
+
+    append_op(IR_array, OP::STORE);
+    item[right].write_to(IR_array);
+    item[left].write_to(IR_array);
+    item[src] = item[left]; // return left;
+    return;
+  }
+  // conpound assignment : += -= etc...
+  const auto operation = str_to_biop({node->name.data(), 1}); // first ch
+  const Id temp = createTemp();
+
+  // ADD/MUL... <left> <right> <temp>
+  append_op(IR_array, operation);
+  item[left].write_to(IR_array);
+  item[right].write_to(IR_array);
+  append_id(IR_array, temp);
+
+  append_op(IR_array, OP::STORE);
+  append_id(IR_array, temp);
+  item[left].write_to(IR_array);
+
+  item[src] = item[left]; // return left;
+}
+void Converter::gen_unop(const Node &node, const size_t base_idx, size_t src) {
+  const auto operand = base_idx;
+  const auto newBase = base_idx + 1;
+  auto *const expression = *Tree::getChild(node, 1);
+  const auto operation = str_to_unop(node->name);
+  const Id temp = createTemp(); //  NEG right temp
+  //==============================================
+  gen_expression(expression, operand, newBase);
+
+  append_op(IR_array, operation);
+  item[operand].write_to(IR_array);
+  append_id(IR_array, temp);
+
+  //==============================================
+  item[src].set_var(temp);
+}
+
+void Converter::gen_expression(const Node &node, size_t src, size_t base_idx) {
+  checkItemSize(base_idx, item);
+
+  if (gen_operand(node, item[src])) {
+    return;
+  }
+  switch (node->type) {
+  case NodeType::UNOP:
+    gen_unop(node, base_idx, src);
+    break;
+
+  case NodeType::ASSIGN:
+    gen_assign(node, base_idx, src);
+    break;
+
+  case NodeType::BIOP:
+    gen_biop(node, base_idx, src);
+    break;
+
+  case NodeType::CALL:
+    gen_call(node, src, base_idx);
+    break;
+  default:
+    throw std::runtime_error("unkown expression!");
+  }
+}
+void Converter::varDeclaration(const Node &variable) {
+  string_view varname = (*Tree::getChild(variable, 1))->name;
+  string_view vartype = (*Tree::getChild(variable, 2))->name;
+
+  Id new_varname = get_id(varname);
+
+  if (variable->is_constant) {
+    Node *default_value = Tree::getChild(variable, 3);
+
+    gen_expression(*default_value, 0);
+    Reusable *value = &item[0];
+    append_op(IR_array, OP::DEF);
+    append_id(IR_array, new_varname);
+    append_type(IR_array, str_to_type(vartype));
+    value->write_to(IR_array);
+
+    // DEF <new_varname> <vartype> <value>
+  } else {
+    // VAR <new_varname> <vartype>
+    append_op(IR_array, OP::VAR);
+    append_id(IR_array, new_varname);
+    append_type(IR_array, str_to_type(vartype));
+
+    if (Tree::countChild(variable) >= 3) {
+      Node *initial_value = Tree::getChild(variable, 3);
+
+      gen_expression(*initial_value, 0);
+      Reusable *value = &item[0];
+      append_op(IR_array, OP::STORE);
+      value->write_to(IR_array);
+      append_id(IR_array, new_varname);
+
+      // STORE <value> <new_varname>
+    }
+  }
+}
+
+void Converter::whileStatement(const Node &statement) {
+  Id startCondition = createTemp();
+  Id startLoop = createTemp();
+  Id endLoop = createTemp();
+
+  append_op(IR_array, OP::JMP);
+  append_id(IR_array, startCondition);
+  // JMP <startCondition>
+  append_op(IR_array, OP::LABEL);
+  append_id(IR_array, startCondition);
+  // LABEL <startCondition>
+
+  gen_expression(statement->child, 0);
+  Reusable *condition = &item[0];
+  append_op(IR_array, OP::JMPC);
+  condition->write_to(IR_array);
+  append_id(IR_array, startLoop);
+  // JMPC <condition> <startLoop>
+  append_op(IR_array, OP::JMP);
+  append_id(IR_array, endLoop);
+  // JMP <endLoop>
+
+  append_op(IR_array, OP::LABEL);
+  append_id(IR_array, startLoop);
+  // LABEL <startLoop>
+
+  Node *block = Tree::getChild(statement, 2);
+  GenerateInstructions(*block);
+
+  append_op(IR_array, OP::JMP);
+  append_id(IR_array, startCondition);
+  // JMP <startCondition>
+  append_op(IR_array, OP::LABEL);
+  append_id(IR_array, endLoop);
+  // LABEL <endLoop>
+}
+
+void Converter::ifStatement(const Node &statement) {
+  gen_expression(statement->child, 0);
+  Reusable *condition = &item[0];
+  Id labelA = createTemp();
+  Id labelB = createTemp();
+  Id labelC = createTemp();
+
+  append_op(IR_array, OP::JMPC);
+  condition->write_to(IR_array);
+  append_id(IR_array, labelA);
+  append_op(IR_array, OP::JMP);
+  append_id(IR_array, labelB);
+  append_op(IR_array, OP::LABEL);
+  append_id(IR_array, labelA);
+  // JMPC <condition> <labelA> JMP <labelB> LABEL <labelA>
+
+  Node *instructions = Tree::getChild(statement, 2);
+  GenerateInstructions(*instructions);
+
+  append_op(IR_array, OP::JMP);
+  append_id(IR_array, labelC);
+  append_op(IR_array, OP::LABEL);
+  append_id(IR_array, labelB);
+
+  append_op(IR_array, OP::JMP);
+  append_id(IR_array, labelC);
+  append_op(IR_array, OP::LABEL);
+  append_id(IR_array, labelC);
+
+  // JMP <labelC> LABEL <labelB> JMP <labelC> LABEL <labelC>
+}
+
+void Converter::GenerateFunction(const Node &function) {
+  string_view function_name = (*Tree::getChild(function, 1))->name;
+
+  Id function_id = get_id(function_name);
+
+  if (!found_main && function_name == "main") {
+    found_main = true;
+    mainId = function_id;
+  }
+
+  string_view function_type = (*Tree::getChild(function, 3))->name;
+
+  append_op(IR_array, OP::FUN);
+  append_id(IR_array, function_id);
+  append_type(IR_array, str_to_type(function_type));
+  // FUN <function_id> <function_type>
+
+  Node parameters = (*Tree::getChild(function, 2));
+
+  int param_count = Tree::countChild(parameters);
+  int it = 0;
+  while (it < param_count) {
+    Node param = (*Tree::getChild(parameters, it + 1));
+    string_view param_name = (*Tree::getChild(param, 1))->name;
+    string_view param_type = (*Tree::getChild(param, 2))->name;
+
+    Id new_varname = get_id(param_name);
+
+    append_op(IR_array, OP::PARAM);
+    // PARAM
+
+    if (param->is_constant) {
+      append_op(IR_array, OP::DEF);
+      // DEF
+    } else {
+      append_op(IR_array, OP::VAR);
+      // VAR
+    }
+    append_id(IR_array, new_varname);
+    append_type(IR_array, str_to_type(param_type));
+    // <new_varname> <param_type>
+    it++;
+  }
+
+  GenerateInstructions(*Tree::getChild(function, 4));
+
+  append_op(IR_array, OP::END);
+}
+
+void Converter::returnStatement(const Node &command) {
+  if (command->child != nullptr) {
+    Node return_value = command->child;
+
+    gen_expression(return_value, 0);
+    Reusable *value = &item[0];
+    append_op(IR_array, OP::RET);
+    value->write_to(IR_array);
+    // save_to_str(result, "RET ", ret_result, '\n');
+  } else {
+    append_op(IR_array, OP::RET);
+
+    append_tag(IR_array, Tag::VOID);
+    // save_to_str(result, "RET VOID\n");
+  }
+}
+
+void Converter::GenerateInstructions(const Node &Block) {
+  int cmd_count = Tree::countChild(Block);
+
+  Node cmd;
+  int it = 0;
+  while (it < cmd_count) {
+    cmd = *Tree::getChild(Block, it + 1);
+    NodeType cmdtyp = (cmd)->type;
+    switch (cmdtyp) {
+    case NodeType::VARDEC:
+      varDeclaration(cmd);
+      break;
+    case NodeType::CALL:
+      gen_call(cmd);
+      break;
+    case NodeType::RETSTMNT:
+      returnStatement(cmd);
+      break;
+    case NodeType::IFSTMNT:
+      ifStatement(cmd);
+      break;
+    case NodeType::WHILESTMNT:
+      whileStatement(cmd);
+      break;
+    default:
+
+      gen_expression(cmd);
+    }
+    it++;
+  }
+}
+static void add_function(std::unordered_map<string_view, Id> &functions,
+                         const string_view &src, int &fnCounter) {
+  const auto it = functions.find(src);
+  if (it != functions.end()) {
+    throw std::runtime_error("this function already exists! " + string(src));
+  }
+  functions[src] = static_cast<Id>(fnCounter++);
+}
+
+/**
+ * ## Main Program Logic
+ */
+void Converter::code() {
+
+  const auto function_count = Tree::countChild(AST);
+
+  int it = 0;
+
+  while (it < function_count) {
+    Node function = (*Tree::getChild(AST, it + 1));
+
+    add_function(my_functions, function->child->name, fnCounter);
+
+    GenerateFunction(function);
+    it++;
+  }
+}
+
+void save_to_file(const std::string &path, const std::vector<uint8_t> &array) {
+  std::ofstream file(path, std::ios::binary);
+
+  if (!file)
+    throw std::runtime_error("Failed to open file: " + path);
+
+  file.write(reinterpret_cast<const char *>(array.data()),
+             static_cast<std::streamsize>(array.size()));
+}
+
+void Converter::run() {
+  std::cout << "-generating IR...\n";
+  item.resize(4);
+
+  code();
+  append_id(IR_array, mainId);
+
+  std::cout << "-IR generated successfully!\n";
+  std::cout << "-saving IR to file...\n";
+
+  const auto outPath =
+      std::filesystem::path(buildPath) / (IRfilename + "IR.bin");
+
+  save_to_file(outPath.string(), IR_array);
+}
