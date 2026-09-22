@@ -221,7 +221,7 @@ Reusable Converter::gen_expression(const Node &node) {
 void Converter::GenerateFunction(const Node &function) {
   string_view function_name = (*Tree::getChild(function, 1))->name;
 
-  Id function_id = get_id(function_name);
+  Id function_id = get_fn(function_name);
 
   if (!found_main && function_name == "main") {
     found_main = true;

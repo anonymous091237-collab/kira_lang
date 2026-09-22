@@ -5,7 +5,8 @@
 #include <stdexcept>
 
 constexpr uint8_t BITS_PER_BYTE = 8;
-bool Reader::done() { return pos >= buf.size(); }
+
+bool Reader::done() const { return pos >= buf.size(); }
 
 uint8_t Reader::peek() {
     if (done()) {
@@ -43,21 +44,22 @@ uint64_t Reader::readBytes(const uint8_t bytes) {
     }
     return res;
 }
-
 std::string Reader::readVal(Tag *tag_out) {
+    const size_t start_offset = pos; // capture offset before reading
     const auto tag = static_cast<Tag>(next());
-    if (tag_out != nullptr)
+    if (tag_out != nullptr) {
         *tag_out = tag;
+    }
 
-    std::ostringstream os;
-    os << "tag: ";
+    std::ostringstream out;
+    out << "tag: ";
     switch (tag) {
     case Tag::VOID: {
-        os << "<- void";
+        out << "<- void";
         break;
     }
     case Tag::ID: {
-        os << "v" << readId();
+        out << "v" << readId();
         break;
     }
     case Tag::NUM_I8:
@@ -66,7 +68,7 @@ std::string Reader::readVal(Tag *tag_out) {
     case Tag::NUM_I64: {
         const uint8_t bytenum =
             (static_cast<uint8_t>(tag) - static_cast<uint8_t>(Tag::NUM_I8) + 1);
-        os << readBytes(bytenum);
+        out << readBytes(bytenum);
         break;
     }
 
@@ -79,11 +81,11 @@ std::string Reader::readVal(Tag *tag_out) {
 
         const auto size = readBytes(bytenum);
 
-        os << "strSize(" << size << ") \"";
+        out << "strSize(" << size << ") \"";
         for (uint64_t i = 0; i < size; ++i) {
-            os << (char)next();
+            out << (char)next();
         }
-        os << '\"';
+        out << '\"';
         break;
     }
 
@@ -91,5 +93,9 @@ std::string Reader::readVal(Tag *tag_out) {
         throw std::runtime_error("unknown Tag: " +
                                  std::to_string(static_cast<int>(tag)));
     }
-    return os.str();
+
+    const size_t byte_size = pos - start_offset; // bytes consumed by this value
+    out << " [@" << start_offset << ", " << byte_size << "B]";
+
+    return out.str();
 }

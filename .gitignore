@@ -5,3 +5,5 @@ build
 *.exe
 *.out
 *.o
+*.ll
+*.bin

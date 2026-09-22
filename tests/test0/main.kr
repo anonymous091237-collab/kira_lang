@@ -11,6 +11,8 @@ fn main() :int {
     def i64_val :long   = 9223372036854775800;
     def u64_val :ulong  = 18446744073709551615;
 
+
+
     print("-- integer types --\n");
     print("short  : ", i16_val, "\n");
     print("ushort : ", u16_val, "\n");

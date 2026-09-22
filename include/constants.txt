@@ -27,7 +27,21 @@ const std::array<const char*, 24> StrOp = {
     "CALL", "STD",  "END"};
 
 enum class std_lib : uint8_t { PRINT };
-enum class Type : uint8_t { unknown, i1, i8, i16, i32, i64, u8, u16, u32, u64 };
+enum class Type : uint8_t {
+    unknown,
+    i1,
+    i8,
+    i16,
+    i32,
+    i64,
+    u8,
+    u16,
+    u32,
+    u64,
+    ch,
+    str
+};
+
 const std::unordered_map<std::string_view, Type> str_to_Type = {
     {"bool", Type::i1},    {"byte", Type::i8},
     {"ubyte", Type::u8},   {"short", Type::i16},

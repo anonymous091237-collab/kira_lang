@@ -21,8 +21,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    const std::vector<uint8_t> buffer(std::istreambuf_iterator<char>(inputFile),
-                                      {});
+    std::vector<uint8_t> buffer(std::istreambuf_iterator<char>(inputFile), {});
 
     inputFile.close();
 

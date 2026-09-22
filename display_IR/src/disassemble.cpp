@@ -5,32 +5,38 @@
 
 #include "reader.hpp"
 // =============================================================
-const char *op_name(OP op) {
-    if (op > OP::USR)
+const char *op_name(OP opr) {
+    if (opr > OP::USR) {
         return "???OP";
-    else
-        return StrOp[(size_t)op];
+    }
+    return StrOp[(size_t)opr];
 }
 // =============================================================
-const char *Type_name(Type t) {
-    if (t > Type::str)
+const char *Type_name(Type typ) {
+    if (typ > Type::str) {
         return "???Type";
-    else
-        return StrType[(size_t)t];
+    }
+    return StrType[(size_t)typ];
 }
 // =============================================================
-const char *std_name(std_lib s) {
-    switch (s) {
+const char *std_name(std_lib fun) {
+    switch (fun) {
     case std_lib::PRINT:
         return "PRINT";
     default:
         return "???std";
     }
 }
-
 // =============================================================
 void Reader::disassemble(std::ostream &out) {
 
+    const auto main_function_id =
+        static_cast<uint32_t>(buf[buf.size() - 4]) |
+        static_cast<uint32_t>(buf[buf.size() - 3]) << 8 |
+        static_cast<uint32_t>(buf[buf.size() - 2]) << 16 |
+        static_cast<uint32_t>(buf[buf.size() - 1]) << 24;
+    out << "main_function_id  :" << main_function_id << '\n';
+    buf.resize(buf.size() - 5);
     while (!done()) {
 
         const auto operation = static_cast<OP>(next());
@@ -140,11 +146,11 @@ void Reader::disassemble(std::ostream &out) {
                 out << "USR " << readVal() << ' ';
 
                 const auto arg_count = next();
+                out << "argCount:" << static_cast<int>(arg_count) << '(';
 
-                out << "argCount:" << arg_count << '(';
-
-                for (int i = 0; i < arg_count; ++i)
+                for (int i = 0; i < arg_count; ++i) {
                     out << readVal() << ' ';
+                }
 
                 out << ") -> " << readVal() << '\n';
                 break;
@@ -160,6 +166,5 @@ void Reader::disassemble(std::ostream &out) {
         out << "[UNKNOWN 0x" << std::hex
             << static_cast<int>(static_cast<uint8_t>(operation)) << std::dec
             << " at offset " << (pos - 1) << "]\n";
-        continue;
     }
 }

@@ -7,21 +7,21 @@
 enum class Tag : uint8_t;
 
 class Reader {
-   private:
+  private:
     size_t pos = 0;
 
-    bool done();
+    [[nodiscard]] bool done() const;
     uint8_t peek();
     uint8_t next();
 
     uint32_t readId();
     uint64_t readBytes(uint8_t bytes);
-    std::string readVal(Tag* tag_out = nullptr);
+    std::string readVal(Tag *tag_out = nullptr);
 
-   public:
-    void disassemble(std::ostream& out);
-    explicit Reader(const std::vector<uint8_t>& buffer) : buf(buffer) {}
-    const std::vector<uint8_t>& buf;
+  public:
+    void disassemble(std::ostream &out);
+    explicit Reader(std::vector<uint8_t> &buffer) : buf(buffer) {}
+    std::vector<uint8_t> &buf;
 };
 
 enum class Tag : uint8_t {
@@ -61,13 +61,13 @@ enum class OP : uint8_t {
     SUB,
     MUL,
     DIV,
-    MOD,  // math operation
+    MOD, // math operation
     EQ,
     NE,
     LT,
     LE,
     GT,
-    GE,  // comparison
+    GE, // comparison
     DEF,
     JMPC,
     JMP,
@@ -79,10 +79,10 @@ enum class OP : uint8_t {
     END,
     USR
 };
-const std::array<const char*, 25> StrOp = {
+const std::array<const char *, 25> StrOp = {
     "FUN",   "RET", "VAR",   "STORE", "ADD", "SUB", "MUL", "DIV",  "MOD",
     "EQ",    "NE",  "LT",    "LE",    "GT",  "GE",  "DEF", "JMPC", "JMP",
     "LABEL", "NEG", "PARAM", "CALL",  "STD", "END", "USR"};
-const std::array<const char*, 25> StrType = {"unknown", "i1",  "i8", "i16",
-                                             "i32",     "i64", "u8", "u16",
-                                             "u32",     "u64", "ch", "str"};
+const std::array<const char *, 25> StrType = {"unknown", "i1",  "i8", "i16",
+                                              "i32",     "i64", "u8", "u16",
+                                              "u32",     "u64", "ch", "str"};

@@ -1,64 +1,36 @@
-
+#include "compile.hpp"
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 
-#include "compiler.hpp"
-#include "type_resolver.hpp"
+int main(int argc, char *argv[]) {
 
-int main(int argc, char* argv[]) {
-    if (argc != 3) {
-        std::cerr << "How to use it:\n\tkllvm.exe <IRfile> <output_name>";
+    if (argc < 2 || argc > 3) {
+        std::cerr << "Usage:\n\tkllvm <IRfile> [output_name]\n";
         return 1;
     }
 
-    const std::string file = argv[1];
-    const std::string name = argv[2];
+    const std::filesystem::path input_path(argv[1]);
 
-    //=====================================================================
-    const std::filesystem::path inputPath(file);
-    const auto dir = inputPath.parent_path();
-    // const auto baseName = inputPath.stem().string();
+    const std::string stem =
+        (argc == 3) ? std::string(argv[2]) : input_path.stem().string();
 
-    const auto output_path =
-        (!dir.empty()) ? dir.string() + '\\' + name + ".ll" : name + ".ll";
-
-    //=====================================================================
     try {
-        LlvmBuilder g;
-        // g.mainId = c.mainId;
+        std::ofstream file("c:\\dev\\hello.ll");
 
-        g.load_IR(file);
+        compile C(input_path.string(), file);
+        C.G.run();
+        std::cout << "========\nDEBUG\n========\n";
+        C.G.print();
+        std::cout << "========\nDEBUG\n========\n";
+        C.fill_str_array();
 
-        Resolver r(&g.flat_str_array, &g.store_strings, &g.tokens, &g.variables,
-                   &g.functions);
-
-        r.build_type_context();
-
-        smart_resolve_Types(g.variables, r.constraints);
-
-#ifdef _DEBUG
-        std::cout << "=======solved===================\n";
-        for (const auto& [key, value] : g.variables) {
-            std::cout << "var " << value.id << " : "
-                      << Type_to_str.at(value.type) << '\n';
-        }
-#endif
-
-        g.string_offset = r.string_offset;
-        g.run();
-        g.generate_ll(output_path);
-
-    } catch (const std::exception& e) {
+        C.run();
+        file.close();
+    } catch (const std::exception &e) {
         std::cerr << "Compile error: " << e.what() << '\n';
+        return 1;
     }
 
-    //===========================================================
-    const auto exe_path =
-        (!dir.empty()) ? dir.string() + '\\' + name + ".exe" : name + ".exe";
-
-    const auto compile_cmd = "clang -O3 " + output_path + " -o " + exe_path;
-
-    std::system(compile_cmd.c_str());
     return 0;
 }
-
